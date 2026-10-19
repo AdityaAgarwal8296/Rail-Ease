@@ -1,0 +1,22 @@
+# Binaries & Compiled Executables
+*.exe
+*.o
+*.obj
+*.dll
+*.so
+*.dylib
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Temporary files
+*.log
+*.tmp

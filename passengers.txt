@@ -1,0 +1,25 @@
+4
+1001
+Aditya
+12003
+Intercity Express
+350
+0
+1002
+Vikram Malhotra
+12001
+Shatabdi Express
+750
+0
+1003
+ADITYA
+12002
+Rajdhani Express
+1800
+1
+1004
+ADITYA
+12002
+Rajdhani Express
+1800
+1
