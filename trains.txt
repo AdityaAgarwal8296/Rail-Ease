@@ -1,0 +1,22 @@
+3
+12001
+Shatabdi Express
+Delhi
+Agra
+3
+3
+750
+12002
+Rajdhani Express
+Mumbai
+Delhi
+2
+2
+1800
+12003
+Intercity Express
+Kanpur
+Lucknow
+4
+4
+350

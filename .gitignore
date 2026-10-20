@@ -1,0 +1,5 @@
+*.exe
+*.o
+.vercel
+node_modules/
+.DS_Store

@@ -1,0 +1,7 @@
+*.exe
+*.o
+.git
+.gitignore
+test_suite.ps1
+build.bat
+run.bat
