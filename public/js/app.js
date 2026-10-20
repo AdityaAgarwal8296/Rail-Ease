@@ -8,7 +8,11 @@
 // API CLIENT
 // ============================================================================
 const API = {
+<<<<<<< HEAD
   baseUrl: window.BACKEND_API_URL || window.location.origin,
+=======
+  baseUrl: window.location.origin,
+>>>>>>> 3d86135348a41c454c33a698403f178999cee826
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;

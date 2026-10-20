@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 3d86135348a41c454c33a698403f178999cee826
 # RailEase — Railway Reservation System
 
 > A professional full-stack web application transforming an existing C++ Railway Reservation System into a modern web experience backed by a native C++ REST API and persistent text-file storage.
@@ -334,3 +338,8 @@ The suite runs 25 automated assertions covering:
 10. Blank passenger name rejection (400)
 11. Malformed JSON handling (400)
 12. Live operations analytics calculation
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 3d86135348a41c454c33a698403f178999cee826

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 5
+=======
+4
+>>>>>>> 3d86135348a41c454c33a698403f178999cee826
 1001
 Aditya
 12003
@@ -16,12 +20,17 @@ ADITYA
 12002
 Rajdhani Express
 1800
+<<<<<<< HEAD
 0
+=======
+1
+>>>>>>> 3d86135348a41c454c33a698403f178999cee826
 1004
 ADITYA
 12002
 Rajdhani Express
 1800
+<<<<<<< HEAD
 0
 1005
 Aditya
@@ -29,3 +38,6 @@ Aditya
 Shatabdi Express
 750
 0
+=======
+1
+>>>>>>> 3d86135348a41c454c33a698403f178999cee826
