@@ -7,8 +7,8 @@ WORKDIR /app
 COPY include/ ./include/
 COPY server.cpp railway.cpp ./
 
-# Build with optimizations and pthread
-RUN g++ -std=c++17 -O2 server.cpp -pthread -o server
+# Build with optimizations, include path, and pthread
+RUN g++ -std=c++17 -O2 -Iinclude server.cpp -pthread -o server
 
 # Minimal production runtime image
 FROM debian:bookworm-slim

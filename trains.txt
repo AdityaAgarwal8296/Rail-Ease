@@ -11,16 +11,12 @@ Rajdhani Express
 Mumbai
 Delhi
 2
-<<<<<<< HEAD
-2
-=======
 0
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
 1800
 12003
 Intercity Express
 Kanpur
 Lucknow
 4
-4
+3
 350

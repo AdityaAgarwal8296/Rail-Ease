@@ -1,16 +1,8 @@
-<<<<<<< HEAD
 #ifdef _WIN32
-=======
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
 #define WINVER 0x0501
 #define _WIN32_WINNT 0x0501
 
 #include <io.h>
-<<<<<<< HEAD
-=======
-#include <string.h>
-#include <strings.h>
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -18,7 +10,6 @@
 #define _access_s(p, m) _access(p, m)
 #endif
 
-<<<<<<< HEAD
 #ifndef IPV6_V6ONLY
 #define IPV6_V6ONLY 27
 #endif
@@ -29,19 +20,10 @@
 #include <string.h>
 #include <strings.h>
 
-=======
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
 #ifndef _stricmp
 #define _stricmp strcasecmp
 #endif
 
-<<<<<<< HEAD
-=======
-#ifndef IPV6_V6ONLY
-#define IPV6_V6ONLY 27
-#endif
-
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
 #if defined(__MINGW32__) && !defined(_GLIBCXX_HAS_GTHREADS)
 #include "mingw.thread.h"
 #include "mingw.mutex.h"
@@ -61,10 +43,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-<<<<<<< HEAD
 #include <cstdlib>
-=======
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
 
 using json = nlohmann::json;
 
@@ -128,7 +107,6 @@ static void setJson(httplib::Response& res, const json& j, int statusCode = 200)
 
 int main(int argc, char* argv[]) {
     int port = 8080;
-<<<<<<< HEAD
     const char* envPort = std::getenv("PORT");
     if (envPort) {
         try {
@@ -137,9 +115,6 @@ int main(int argc, char* argv[]) {
             port = 8080;
         }
     } else if (argc > 1) {
-=======
-    if (argc > 1) {
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
         try {
             port = std::stoi(argv[1]);
         } catch (...) {

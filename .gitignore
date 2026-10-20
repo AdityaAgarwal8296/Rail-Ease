@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-*.exe
-*.o
-.vercel
-node_modules/
-.DS_Store
-=======
 # Binaries & Compiled Executables
 *.exe
 *.o
@@ -12,6 +5,10 @@ node_modules/
 *.dll
 *.so
 *.dylib
+
+# Deployments & Packages
+.vercel
+node_modules/
 
 # IDE & Editor files
 .vscode/
@@ -27,4 +24,3 @@ desktop.ini
 # Logs & Temporary files
 *.log
 *.tmp
->>>>>>> 3d86135348a41c454c33a698403f178999cee826
