@@ -338,7 +338,13 @@ const app = {
       this.loadDashboard();
     } else if (viewName === "manage") {
       this.updateManageViewForRole();
-      this.renderManageFleet();
+      if (!this.state.trains || !this.state.trains.length) {
+        this.fetchTrains().then(() => {
+          this.renderManageFleet();
+        });
+      } else {
+        this.renderManageFleet();
+      }
     }
   },
 
@@ -997,6 +1003,13 @@ const app = {
   // ==========================================================================
   // TRAIN FLEET MANAGEMENT & SEAT CAPACITY
   // ==========================================================================
+  async refreshManageView() {
+    await this.fetchTrains();
+    this.updateManageViewForRole();
+    this.renderManageFleet();
+    this.showToast("Fleet Refreshed", "Train fleet status synchronized with server.", "info");
+  },
+
   renderManageFleet() {
     const tbody = document.getElementById("manage-fleet-body");
     if (!tbody) return;
