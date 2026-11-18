@@ -74,6 +74,7 @@ static bool iequals(const std::string& a, const std::string& b) {
 // Convert a Train object to JSON
 static json trainToJson(Train* train) {
     if (!train) return json::object();
+    int booked = g_railway.getBookedSeats(train->getTrainNumber());
     return json{
         {"trainNumber", train->getTrainNumber()},
         {"trainName", train->getTrainName()},
@@ -81,6 +82,7 @@ static json trainToJson(Train* train) {
         {"destination", train->getDestination()},
         {"totalSeats", train->getTotalSeats()},
         {"availableSeats", train->getAvailableSeats()},
+        {"bookedSeats", booked},
         {"fare", train->getFare()}
     };
 }
@@ -127,13 +129,16 @@ int main(int argc, char* argv[]) {
     // Enable CORS for API routes
     svr.set_default_headers({
         {"Access-Control-Allow-Origin", "*"},
-        {"Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"},
-        {"Access-Control-Allow-Headers", "Content-Type, Authorization, Accept"}
+        {"Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH"},
+        {"Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, X-User-Role"}
     });
 
     // Handle OPTIONS preflight requests
     svr.Options(".*", [](const httplib::Request&, httplib::Response& res) {
         res.status = 200;
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, X-User-Role");
     });
 
     // Serve static files from ./public directory
@@ -242,6 +247,261 @@ int main(int argc, char* argv[]) {
         };
         setJson(res, response, 200);
     });
+
+    // -------------------------------------------------------------
+    // API: POST /api/trains
+    // Creates a new train in the fleet
+    // -------------------------------------------------------------
+    svr.Post("/api/trains", [](const httplib::Request& req, httplib::Response& res) {
+        // Role-based Access Control: Adding trains is restricted to Head
+        if (req.has_header("X-User-Role")) {
+            std::string role = req.get_header_value("X-User-Role");
+            if (iequals(role, "passenger")) {
+                setJson(res, {
+                    {"success", false},
+                    {"error", "Access Denied: The 'Add Trains' option is disabled for Passengers and is ONLY available to the Head."}
+                }, 403);
+                return;
+            }
+        }
+
+        if (req.body.empty()) {
+            setJson(res, {{"success", false}, {"error", "Request body cannot be empty"}}, 400);
+            return;
+        }
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            setJson(res, {{"success", false}, {"error", std::string("Malformed JSON body: ") + e.what()}}, 400);
+            return;
+        }
+
+        // Required fields check
+        if (!body.contains("trainNumber") || !body.contains("trainName") ||
+            !body.contains("source") || !body.contains("destination") ||
+            !body.contains("totalSeats") || !body.contains("fare")) {
+            setJson(res, {{"success", false}, {"error", "Missing required fields: 'trainNumber', 'trainName', 'source', 'destination', 'totalSeats', and 'fare'"}}, 400);
+            return;
+        }
+
+        int trainNumber = 0;
+        try {
+            if (body["trainNumber"].is_number()) {
+                trainNumber = body["trainNumber"].get<int>();
+            } else if (body["trainNumber"].is_string()) {
+                trainNumber = std::stoi(body["trainNumber"].get<std::string>());
+            } else {
+                setJson(res, {{"success", false}, {"error", "'trainNumber' must be a valid integer"}}, 400);
+                return;
+            }
+        } catch (...) {
+            setJson(res, {{"success", false}, {"error", "'trainNumber' must be a valid integer"}}, 400);
+            return;
+        }
+
+        if (trainNumber <= 0) {
+            setJson(res, {{"success", false}, {"error", "Train number must be a positive integer"}}, 400);
+            return;
+        }
+
+        if (!body["trainName"].is_string() || !body["source"].is_string() || !body["destination"].is_string()) {
+            setJson(res, {{"success", false}, {"error", "'trainName', 'source', and 'destination' must be strings"}}, 400);
+            return;
+        }
+
+        std::string trainName = trim(body["trainName"].get<std::string>());
+        std::string source = trim(body["source"].get<std::string>());
+        std::string destination = trim(body["destination"].get<std::string>());
+
+        if (trainName.empty()) {
+            setJson(res, {{"success", false}, {"error", "Train name cannot be blank"}}, 400);
+            return;
+        }
+        if (source.empty()) {
+            setJson(res, {{"success", false}, {"error", "Source station cannot be blank"}}, 400);
+            return;
+        }
+        if (destination.empty()) {
+            setJson(res, {{"success", false}, {"error", "Destination station cannot be blank"}}, 400);
+            return;
+        }
+        if (iequals(source, destination)) {
+            setJson(res, {{"success", false}, {"error", "Source and destination stations cannot be the same"}}, 400);
+            return;
+        }
+
+        int totalSeats = 0;
+        try {
+            if (body["totalSeats"].is_number()) {
+                totalSeats = body["totalSeats"].get<int>();
+            } else if (body["totalSeats"].is_string()) {
+                totalSeats = std::stoi(body["totalSeats"].get<std::string>());
+            } else {
+                setJson(res, {{"success", false}, {"error", "'totalSeats' must be a valid positive integer"}}, 400);
+                return;
+            }
+        } catch (...) {
+            setJson(res, {{"success", false}, {"error", "'totalSeats' must be a valid positive integer"}}, 400);
+            return;
+        }
+
+        if (totalSeats <= 0) {
+            setJson(res, {{"success", false}, {"error", "Total seats must be a positive integer"}}, 400);
+            return;
+        }
+
+        int fare = 0;
+        try {
+            if (body["fare"].is_number()) {
+                fare = body["fare"].get<int>();
+            } else if (body["fare"].is_string()) {
+                fare = std::stoi(body["fare"].get<std::string>());
+            } else {
+                setJson(res, {{"success", false}, {"error", "'fare' must be a valid positive amount"}}, 400);
+                return;
+            }
+        } catch (...) {
+            setJson(res, {{"success", false}, {"error", "'fare' must be a valid positive amount"}}, 400);
+            return;
+        }
+
+        if (fare <= 0) {
+            setJson(res, {{"success", false}, {"error", "Fare must be a positive amount"}}, 400);
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(g_systemMutex);
+
+        std::string errorMsg;
+        bool ok = g_railway.addTrainProgrammatic(trainNumber, trainName, source, destination, totalSeats, fare, errorMsg);
+        if (!ok) {
+            int status = 400;
+            if (errorMsg.find("already exists") != std::string::npos || errorMsg.find("Duplicate") != std::string::npos) {
+                status = 409;
+            } else if (errorMsg.find("capacity reached") != std::string::npos) {
+                status = 409;
+            }
+            setJson(res, {{"success", false}, {"error", errorMsg}}, status);
+            return;
+        }
+
+        Train* newTrain = g_railway.findTrainByNumber(trainNumber);
+        json response = {
+            {"success", true},
+            {"message", "Train added successfully!"},
+            {"train", trainToJson(newTrain)}
+        };
+        setJson(res, response, 201);
+    });
+
+    // -------------------------------------------------------------
+    // API: PATCH & POST /api/trains/:number/capacity
+    // Updates seat capacity for a train
+    // -------------------------------------------------------------
+    auto handleCapacityUpdate = [](const httplib::Request& req, httplib::Response& res) {
+        // Role-based Access Control: Modifying capacity is restricted to Head
+        if (req.has_header("X-User-Role")) {
+            std::string role = req.get_header_value("X-User-Role");
+            if (iequals(role, "passenger")) {
+                setJson(res, {
+                    {"success", false},
+                    {"error", "Access Denied: Modifying train seat capacity is disabled for Passengers and is ONLY available to the Head."}
+                }, 403);
+                return;
+            }
+        }
+
+        std::string numStr = req.matches[1];
+        int trainNumber = 0;
+        try {
+            trainNumber = std::stoi(numStr);
+        } catch (...) {
+            setJson(res, {{"success", false}, {"error", "Invalid train number format"}}, 400);
+            return;
+        }
+
+        if (req.body.empty()) {
+            setJson(res, {{"success", false}, {"error", "Request body cannot be empty"}}, 400);
+            return;
+        }
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            setJson(res, {{"success", false}, {"error", std::string("Malformed JSON body: ") + e.what()}}, 400);
+            return;
+        }
+
+        std::string key = "";
+        if (body.contains("totalSeats")) key = "totalSeats";
+        else if (body.contains("seatCapacity")) key = "seatCapacity";
+        else if (body.contains("capacity")) key = "capacity";
+        else {
+            setJson(res, {{"success", false}, {"error", "Missing required field: 'totalSeats'"}}, 400);
+            return;
+        }
+
+        int newCapacity = 0;
+        try {
+            if (body[key].is_number()) {
+                newCapacity = body[key].get<int>();
+            } else if (body[key].is_string()) {
+                newCapacity = std::stoi(body[key].get<std::string>());
+            } else {
+                setJson(res, {{"success", false}, {"error", "'totalSeats' must be a valid positive integer"}}, 400);
+                return;
+            }
+        } catch (...) {
+            setJson(res, {{"success", false}, {"error", "'totalSeats' must be a valid positive integer"}}, 400);
+            return;
+        }
+
+        if (newCapacity <= 0) {
+            setJson(res, {{"success", false}, {"error", "Seat capacity must be a positive integer"}}, 400);
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(g_systemMutex);
+
+        Train* train = g_railway.findTrainByNumber(trainNumber);
+        if (!train) {
+            setJson(res, {{"success", false}, {"error", "Train number " + numStr + " not found"}}, 404);
+            return;
+        }
+
+        int booked = g_railway.getBookedSeats(trainNumber);
+        if (newCapacity < booked) {
+            setJson(res, {
+                {"success", false},
+                {"error", "Cannot reduce seat capacity below active bookings (" + std::to_string(booked) + " active seats currently booked)"},
+                {"activeBookings", booked},
+                {"requestedCapacity", newCapacity}
+            }, 409);
+            return;
+        }
+
+        std::string errorMsg;
+        bool ok = g_railway.updateTrainCapacityProgrammatic(trainNumber, newCapacity, errorMsg);
+        if (!ok) {
+            int status = 400;
+            if (errorMsg.find("Cannot reduce") != std::string::npos) status = 409;
+            setJson(res, {{"success", false}, {"error", errorMsg}}, status);
+            return;
+        }
+
+        json response = {
+            {"success", true},
+            {"message", "Train seat capacity updated successfully!"},
+            {"train", trainToJson(train)}
+        };
+        setJson(res, response, 200);
+    };
+
+    svr.Patch(R"(/api/trains/(\d+)/capacity)", handleCapacityUpdate);
+    svr.Post(R"(/api/trains/(\d+)/capacity)", handleCapacityUpdate);
 
     // -------------------------------------------------------------
     // API: GET /api/bookings

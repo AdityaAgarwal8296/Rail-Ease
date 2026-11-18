@@ -13,6 +13,24 @@ if %ERRORLEVEL% neq 0 (
 echo [+] railway.exe built successfully!
 echo.
 
+echo [*] Compiling terminal console application (railway_terminal.exe)...
+g++ -std=c++11 railway_terminal.cpp -o railway_terminal.exe
+if %ERRORLEVEL% neq 0 (
+    echo [-] Failed to compile railway_terminal.cpp
+    exit /b %ERRORLEVEL%
+)
+echo [+] railway_terminal.exe built successfully!
+echo.
+
+echo [*] Compiling standalone console application (railway_standalone.exe)...
+g++ -std=c++11 railway_standalone.cpp -o railway_standalone.exe
+if %ERRORLEVEL% neq 0 (
+    echo [-] Failed to compile railway_standalone.cpp
+    exit /b %ERRORLEVEL%
+)
+echo [+] railway_standalone.exe built successfully!
+echo.
+
 echo [*] Compiling web server application (server.exe)...
 g++ -std=c++17 -Iinclude server.cpp -lws2_32 -o server.exe
 if %ERRORLEVEL% neq 0 (

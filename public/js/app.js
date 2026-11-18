@@ -12,9 +12,11 @@ const API = {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const currentRole = (window.app && window.app.state && window.app.state.userRole) ? window.app.state.userRole : "passenger";
     const defaultHeaders = {
       "Accept": "application/json",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "X-User-Role": currentRole
     };
 
     options.headers = { ...defaultHeaders, ...options.headers };
@@ -73,6 +75,20 @@ const API = {
     });
   },
 
+  async addTrain(trainData) {
+    return this.request("/api/trains", {
+      method: "POST",
+      body: JSON.stringify(trainData)
+    });
+  },
+
+  async updateTrainCapacity(trainNumber, totalSeats) {
+    return this.request(`/api/trains/${trainNumber}/capacity`, {
+      method: "PATCH",
+      body: JSON.stringify({ totalSeats: Number(totalSeats) })
+    });
+  },
+
   async getStats() {
     return this.request("/api/stats");
   }
@@ -84,10 +100,12 @@ const API = {
 const app = {
   state: {
     currentView: "home",
+    userRole: "passenger", // "passenger" or "head"
     trains: [],
     bookings: [],
     stats: null,
     selectedTrainForBooking: null,
+    selectedTrainForCapacity: null,
     pendingCancelPnr: null,
     bookingFilter: "ALL"
   },
@@ -104,6 +122,20 @@ const app = {
       dateInput.min = new Date().toISOString().split("T")[0];
     }
 
+    // Role Initialization: Check localStorage or trigger popup
+    const savedRole = localStorage.getItem("railease_user_role");
+    if (savedRole && (savedRole === "passenger" || savedRole === "head")) {
+      this.state.userRole = savedRole;
+      this.applyRoleUI(false);
+    } else {
+      // First visit: pop up role selection modal so user can choose Passenger or Head
+      this.state.userRole = "passenger";
+      this.applyRoleUI(false);
+      setTimeout(() => {
+        this.openRoleModal();
+      }, 450);
+    }
+
     // Handle initial hash routing
     window.addEventListener("hashchange", () => this.handleHashChange());
     this.handleHashChange();
@@ -114,6 +146,130 @@ const app = {
 
     // Setup periodic health heartbeat (every 15s)
     setInterval(() => this.checkBackendHealth(), 15000);
+  },
+
+  // ==========================================================================
+  // USER ROLE MANAGEMENT (PASSENGER vs HEAD)
+  // ==========================================================================
+  selectRole(role) {
+    if (role !== "passenger" && role !== "head") return;
+    this.state.userRole = role;
+    localStorage.setItem("railease_user_role", role);
+    this.applyRoleUI(true);
+    this.closeRoleModal();
+  },
+
+  openRoleModal() {
+    const isHead = this.state.userRole === "head";
+    const cardPass = document.getElementById("card-role-passenger");
+    const cardHead = document.getElementById("card-role-head");
+    if (cardPass) cardPass.classList.toggle("active-role", !isHead);
+    if (cardHead) cardHead.classList.toggle("active-role", isHead);
+
+    const modal = document.getElementById("role-modal");
+    if (modal) modal.classList.add("active");
+  },
+
+  closeRoleModal() {
+    const modal = document.getElementById("role-modal");
+    if (modal) modal.classList.remove("active");
+  },
+
+  applyRoleUI(showToastNotice = true) {
+    const isHead = this.state.userRole === "head";
+
+    // 1. Update Navbar Role Pill
+    const rolePill = document.getElementById("nav-role-pill");
+    const roleIcon = document.getElementById("nav-role-icon");
+    const roleText = document.getElementById("nav-role-text");
+
+    if (rolePill && roleIcon && roleText) {
+      if (isHead) {
+        rolePill.classList.add("role-head");
+        roleIcon.textContent = "👨‍💼";
+        roleText.textContent = "Head (Admin)";
+      } else {
+        rolePill.classList.remove("role-head");
+        roleIcon.textContent = "👤";
+        roleText.textContent = "Passenger";
+      }
+    }
+
+    // 2. Update Modal active styles
+    const cardPass = document.getElementById("card-role-passenger");
+    const cardHead = document.getElementById("card-role-head");
+    if (cardPass) cardPass.classList.toggle("active-role", !isHead);
+    if (cardHead) cardHead.classList.toggle("active-role", isHead);
+
+    // 3. Update Manage View form & alert banner
+    this.updateManageViewForRole();
+
+    // 4. Update fleet tables & dashboard
+    this.renderManageFleet();
+    this.loadDashboard();
+
+    // 5. Toast notice
+    if (showToastNotice) {
+      if (isHead) {
+        this.showToast("Role Switched: Head", "You now have full administrator privileges. 'Add Trains' option is ENABLED.", "info");
+      } else {
+        this.showToast("Role Switched: Passenger", "Switched to Passenger mode. 'Add Trains' option is DISABLED.", "info");
+      }
+    }
+  },
+
+  updateManageViewForRole() {
+    const isHead = this.state.userRole === "head";
+    const banner = document.getElementById("manage-role-banner");
+    const addTrainForm = document.getElementById("add-train-form");
+    const submitBtn = document.getElementById("btn-submit-train");
+    const submitText = document.getElementById("btn-add-train-text");
+
+    if (banner) {
+      if (isHead) {
+        banner.className = "role-status-banner banner-head";
+        banner.innerHTML = `
+          <div>
+            <strong>Head Mode Active:</strong> You have full administrative privileges. The <strong>"Add Train"</strong> option is <strong>enabled</strong>.
+          </div>
+          <button type="button" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem; background: white;" onclick="app.selectRole('passenger')">
+            Switch to Passenger
+          </button>
+        `;
+      } else {
+        banner.className = "role-status-banner banner-passenger";
+        banner.innerHTML = `
+          <div>
+            <strong>Passenger Mode Active:</strong> The <strong>"Add Trains"</strong> option is <strong>disabled</strong> for Passengers and is only available to the Head.
+          </div>
+          <button type="button" class="btn btn-primary" style="padding: 4px 12px; font-size: 0.8rem;" onclick="app.selectRole('head')">
+            Switch to Head Role
+          </button>
+        `;
+      }
+    }
+
+    if (addTrainForm) {
+      const inputs = addTrainForm.querySelectorAll("input, button[type='reset']");
+      inputs.forEach(input => {
+        input.disabled = !isHead;
+      });
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = !isHead;
+      if (isHead) {
+        submitBtn.style.opacity = "1";
+        submitBtn.style.cursor = "pointer";
+        if (submitText) submitText.textContent = "+ Add Train to Fleet";
+        submitBtn.title = "Add new train to the fleet";
+      } else {
+        submitBtn.style.opacity = "0.5";
+        submitBtn.style.cursor = "not-allowed";
+        if (submitText) submitText.textContent = "🔒 Add Train (Head Only)";
+        submitBtn.title = "The 'Add Trains' option is disabled for Passengers. Only available to Head.";
+      }
+    }
   },
 
   async checkBackendHealth() {
@@ -144,7 +300,7 @@ const app = {
 
   handleHashChange() {
     const hash = window.location.hash.replace("#", "") || "home";
-    const validViews = ["home", "search", "pnr", "bookings", "dashboard"];
+    const validViews = ["home", "search", "pnr", "bookings", "dashboard", "manage"];
     if (validViews.includes(hash)) {
       this.navigate(hash, false);
     } else {
@@ -180,6 +336,9 @@ const app = {
       this.refreshBookings();
     } else if (viewName === "dashboard") {
       this.loadDashboard();
+    } else if (viewName === "manage") {
+      this.updateManageViewForRole();
+      this.renderManageFleet();
     }
   },
 
@@ -193,6 +352,7 @@ const app = {
     if (res.ok && res.data.trains) {
       this.state.trains = res.data.trains;
       this.renderTrainList(this.state.trains);
+      this.renderManageFleet();
     } else {
       if (container) {
         container.innerHTML = `
@@ -795,8 +955,13 @@ const app = {
                 </div>
               </td>
               <td><strong style="color:var(--accent-red);">Rs. ${t.fare}</strong></td>
-              <td>
-                <button class="btn btn-outline" style="padding:4px 10px; font-size:0.8rem;" onclick="app.openBookingModal(${t.trainNumber})" ${t.availableSeats <= 0 ? 'disabled' : ''}>
+              <td style="white-space: nowrap;">
+                ${this.state.userRole === 'head' ? `
+                  <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem; margin-right:4px;" onclick="app.openCapacityModal(${t.trainNumber})" title="Change Seat Capacity">
+                    Capacity
+                  </button>
+                ` : ''}
+                <button class="btn btn-primary" style="padding:4px 10px; font-size:0.8rem;" onclick="app.openBookingModal(${t.trainNumber})" ${t.availableSeats <= 0 ? 'disabled' : ''}>
                   Book
                 </button>
               </td>
@@ -825,6 +990,291 @@ const app = {
             </tr>
           `).join("");
         }
+      }
+    }
+  },
+
+  // ==========================================================================
+  // TRAIN FLEET MANAGEMENT & SEAT CAPACITY
+  // ==========================================================================
+  renderManageFleet() {
+    const tbody = document.getElementById("manage-fleet-body");
+    if (!tbody) return;
+
+    if (!this.state.trains || !this.state.trains.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            No trains registered in system. Use the form above to add an express train.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = this.state.trains.map(t => {
+      const booked = t.bookedSeats !== undefined ? t.bookedSeats : (t.totalSeats - t.availableSeats);
+      const isAvailable = t.availableSeats > 0;
+      return `
+        <tr>
+          <td><strong>#${t.trainNumber}</strong></td>
+          <td><strong>${this.escapeHtml(t.trainName)}</strong></td>
+          <td>${this.escapeHtml(t.source)} ➔ ${this.escapeHtml(t.destination)}</td>
+          <td><span style="font-weight: 700; color: var(--primary-navy);">${t.totalSeats} seats</span></td>
+          <td><span style="font-weight: 700; color: ${booked > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${booked} active</span></td>
+          <td>
+            <span class="seats-badge ${isAvailable ? (t.availableSeats <= 2 ? 'seats-low' : 'seats-available') : 'seats-soldout'}" style="font-size:0.75rem;">
+              ${t.availableSeats} available
+            </span>
+          </td>
+          <td><strong style="color: var(--accent-red);">Rs. ${t.fare}</strong></td>
+          <td style="text-align: right;">
+            ${this.state.userRole === 'head' ? `
+              <button class="btn btn-outline" style="padding: 5px 12px; font-size: 0.85rem;" onclick="app.openCapacityModal(${t.trainNumber})">
+                Adjust Capacity
+              </button>
+            ` : `
+              <button class="btn btn-outline" style="padding: 5px 12px; font-size: 0.85rem; opacity: 0.5; cursor: not-allowed;" disabled title="The 'Adjust Capacity' option is only available to Head.">
+                Adjust Capacity (Head)
+              </button>
+            `}
+          </td>
+        </tr>
+      `;
+    }).join("");
+  },
+
+  async handleAddTrainSubmit(e) {
+    e.preventDefault();
+    const errBox = document.getElementById("add-train-error");
+    if (errBox) {
+      errBox.style.display = "none";
+      errBox.textContent = "";
+    }
+
+    const showError = (msg) => {
+      if (errBox) {
+        errBox.textContent = msg;
+        errBox.style.display = "block";
+      }
+    };
+
+    // Role verification guard: Only Head can add trains
+    if (this.state.userRole !== "head") {
+      showError("Access Denied: The 'Add Trains' option is disabled for Passengers and is ONLY available to the Head.");
+      this.showToast("Access Restricted", "The 'Add Trains' option is only available to the Head. Please switch your role to Head in the top bar.", "error");
+      return;
+    }
+
+    const trainNumber = parseInt(document.getElementById("new-train-number").value.trim(), 10);
+    const trainName = document.getElementById("new-train-name").value.trim();
+    const source = document.getElementById("new-train-source").value.trim();
+    const destination = document.getElementById("new-train-destination").value.trim();
+    const totalSeats = parseInt(document.getElementById("new-train-seats").value.trim(), 10);
+    const fare = parseFloat(document.getElementById("new-train-fare").value.trim());
+
+    if (isNaN(trainNumber) || trainNumber <= 0) {
+      showError("Train number must be a valid positive integer.");
+      return;
+    }
+
+    if (this.state.trains.some(t => t.trainNumber === trainNumber)) {
+      showError(`Train number ${trainNumber} already exists in the fleet. Please use a unique number.`);
+      return;
+    }
+
+    if (!trainName) {
+      showError("Train name cannot be empty.");
+      return;
+    }
+
+    if (!source) {
+      showError("Source station cannot be empty.");
+      return;
+    }
+
+    if (!destination) {
+      showError("Destination station cannot be empty.");
+      return;
+    }
+
+    if (source.toLowerCase() === destination.toLowerCase()) {
+      showError("Source and destination must be different stations.");
+      return;
+    }
+
+    if (isNaN(totalSeats) || totalSeats <= 0) {
+      showError("Total seat capacity must be a positive integer (greater than 0).");
+      return;
+    }
+
+    if (isNaN(fare) || fare <= 0) {
+      showError("Fare must be a positive amount.");
+      return;
+    }
+
+    const btn = document.getElementById("btn-submit-train");
+    const btnText = document.getElementById("btn-add-train-text");
+    const btnSpinner = document.getElementById("btn-add-train-spinner");
+
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.style.display = "none";
+    if (btnSpinner) btnSpinner.style.display = "inline-block";
+
+    const res = await API.addTrain({
+      trainNumber,
+      trainName,
+      source,
+      destination,
+      totalSeats,
+      fare
+    });
+
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.style.display = "inline";
+    if (btnSpinner) btnSpinner.style.display = "none";
+
+    if (res.ok && res.data.train) {
+      document.getElementById("add-train-form").reset();
+      this.showToast("Express Train Added", `Train #${trainNumber} (${trainName}) was registered successfully.`, "success");
+
+      await this.fetchTrains();
+      this.renderPopularRoutes();
+      this.renderManageFleet();
+      this.loadDashboard();
+    } else {
+      showError(res.data.error || "Failed to add train to the system.");
+    }
+  },
+
+  openCapacityModal(trainNumber) {
+    if (this.state.userRole !== "head") {
+      this.showToast("Access Restricted", "The 'Adjust Capacity' option is only available to Head.", "error");
+      return;
+    }
+
+    const train = this.state.trains.find(t => t.trainNumber === trainNumber);
+    if (!train) return;
+
+    this.state.selectedTrainForCapacity = train;
+
+    document.getElementById("cap-modal-train-number").textContent = `TRAIN #${train.trainNumber}`;
+    document.getElementById("cap-modal-train-name").textContent = train.trainName;
+    document.getElementById("cap-modal-train-route").textContent = `${train.source} ➔ ${train.destination}`;
+
+    const booked = train.bookedSeats !== undefined ? train.bookedSeats : (train.totalSeats - train.availableSeats);
+    document.getElementById("cap-modal-current-total").textContent = train.totalSeats;
+    document.getElementById("cap-modal-current-booked").textContent = booked;
+    document.getElementById("cap-modal-current-avail").textContent = train.availableSeats;
+
+    const capInput = document.getElementById("capacity-input");
+    capInput.value = train.totalSeats;
+    capInput.min = booked > 0 ? booked : 1;
+
+    const errBox = document.getElementById("capacity-error-msg");
+    if (errBox) {
+      errBox.style.display = "none";
+      errBox.textContent = "";
+    }
+
+    this.previewCapacityChange();
+    document.getElementById("capacity-modal").classList.add("active");
+  },
+
+  closeCapacityModal() {
+    document.getElementById("capacity-modal").classList.remove("active");
+    this.state.selectedTrainForCapacity = null;
+  },
+
+  previewCapacityChange() {
+    const train = this.state.selectedTrainForCapacity;
+    if (!train) return;
+
+    const booked = train.bookedSeats !== undefined ? train.bookedSeats : (train.totalSeats - train.availableSeats);
+    const newTotal = parseInt(document.getElementById("capacity-input").value, 10);
+    const hint = document.getElementById("capacity-preview-hint");
+    if (!hint) return;
+
+    if (isNaN(newTotal) || newTotal <= 0) {
+      hint.textContent = "Please enter a positive seat capacity.";
+      hint.style.color = "var(--text-muted)";
+      return;
+    }
+
+    if (newTotal < booked) {
+      hint.textContent = `Capacity cannot be reduced below ${booked} active bookings.`;
+      hint.style.color = "var(--accent-red)";
+      return;
+    }
+
+    const newAvail = newTotal - booked;
+    const diff = newTotal - train.totalSeats;
+    const diffText = diff > 0 ? `(+${diff} seats)` : (diff < 0 ? `(${diff} seats)` : "(current capacity)");
+    hint.textContent = `New available seats: ${newAvail} ${diffText}.`;
+    hint.style.color = "var(--primary-blue)";
+  },
+
+  async handleCapacitySubmit(e) {
+    e.preventDefault();
+    if (this.state.userRole !== "head") {
+      const errBox = document.getElementById("capacity-error-msg");
+      if (errBox) {
+        errBox.textContent = "Access Denied: The 'Adjust Capacity' option is only available to Head.";
+        errBox.style.display = "block";
+      }
+      this.showToast("Access Restricted", "Modifying train seat capacity is restricted to Head.", "error");
+      return;
+    }
+
+    const train = this.state.selectedTrainForCapacity;
+    if (!train) return;
+
+    const booked = train.bookedSeats !== undefined ? train.bookedSeats : (train.totalSeats - train.availableSeats);
+    const newCapacity = parseInt(document.getElementById("capacity-input").value, 10);
+    const errBox = document.getElementById("capacity-error-msg");
+
+    if (isNaN(newCapacity) || newCapacity <= 0) {
+      if (errBox) {
+        errBox.textContent = "Total seat capacity must be a positive integer.";
+        errBox.style.display = "block";
+      }
+      return;
+    }
+
+    if (newCapacity < booked) {
+      if (errBox) {
+        errBox.textContent = `Cannot reduce total capacity to ${newCapacity}. Train #${train.trainNumber} has ${booked} active reservation(s). Capacity cannot be less than active bookings.`;
+        errBox.style.display = "block";
+      }
+      return;
+    }
+
+    const btn = document.getElementById("btn-confirm-capacity");
+    const btnText = document.getElementById("btn-capacity-text");
+    const btnSpinner = document.getElementById("btn-capacity-spinner");
+
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.style.display = "none";
+    if (btnSpinner) btnSpinner.style.display = "inline-block";
+
+    const res = await API.updateTrainCapacity(train.trainNumber, newCapacity);
+
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.style.display = "inline";
+    if (btnSpinner) btnSpinner.style.display = "none";
+
+    if (res.ok && res.data.train) {
+      this.closeCapacityModal();
+      this.showToast("Capacity Updated", `Train #${train.trainNumber} seat capacity changed to ${newCapacity}. Available seats recalculated.`, "success");
+
+      await this.fetchTrains();
+      this.renderPopularRoutes();
+      this.renderManageFleet();
+      this.loadDashboard();
+    } else {
+      if (errBox) {
+        errBox.textContent = res.data.error || "Failed to update seat capacity.";
+        errBox.style.display = "block";
       }
     }
   },

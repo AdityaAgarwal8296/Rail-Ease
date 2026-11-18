@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy headers and source code
 COPY include/ ./include/
-COPY server.cpp railway.cpp ./
+COPY server.cpp railway.cpp railway_terminal.cpp ./
 
 # Build with optimizations, include path, and pthread
 RUN g++ -std=c++17 -O2 -Iinclude server.cpp -pthread -o server
